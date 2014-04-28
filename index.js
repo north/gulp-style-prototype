@@ -31,23 +31,20 @@ module.exports = function (gulp) {
       .pipe(browserSync.reload({stream:true}));
   });
 
-  gulp.task('y2j', function () {
-    // gulp.src('pages/style-tile.yml')
-    //   .pipe(yamlJSON())
-    //   .pipe(gulp.dest('.www/pages'))
-    //   .pipe(browserSync.reload({stream:true}));
-
-    gulp.src('config/sections.yml')
+  gulp.task('sections', function () {
+    watch({ glob: 'config/sections.yml'})
       .pipe(yamlJSON())
       .pipe(gulp.dest('.www/config'))
       .pipe(buildMenu())
       .pipe(browserSync.reload({stream:true}));
   });
 
-  gulp.task('bcc', function () {
+  gulp.task('bower-copy-components', function () {
     gulp.src('bower_components/**/*')
       .pipe(gulp.dest('.www/bower_components'));
-  })
+  });
+
+  gulp.task('bcc', ['bower-copy-components']);
 
   //////////////////////////////
   // Begin Gulp Tasks
@@ -170,7 +167,7 @@ module.exports = function (gulp) {
   //////////////////////////////
   // Server Tasks
   //////////////////////////////
-  gulp.task('server', ['watch', 'components', 'data', 'compass', 'browserSync']);
+  gulp.task('server', ['watch', 'sections', 'bcc', 'components', 'data', 'compass', 'browserSync']);
   gulp.task('serve', ['server']);
 
   //////////////////////////////
