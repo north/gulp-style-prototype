@@ -91,7 +91,7 @@ module.exports = function (gulp) {
         fs.mkdirSync(dest);
       }
 
-      watch({ glob: k + '/**/*.html' })
+      watch({ glob: k + '/**/*' })
         .pipe(plumber())
         .pipe(maid({folder: k}))
         .pipe(folderwalk({
@@ -99,7 +99,7 @@ module.exports = function (gulp) {
         }))
         .pipe(browserSync.reload({stream:true}));
 
-      watch({ glob: k + '/**/*.yml' })
+      watch({ glob: k + '/' + k +'.yml' })
         .pipe(plumber())
         .pipe(yamlJSON())
         .pipe(gulp.dest('.tmp/scopes'))
