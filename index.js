@@ -37,6 +37,11 @@ module.exports = function (gulp) {
       .pipe(gulp.dest('.www/config'))
       .pipe(buildMenu())
       .pipe(browserSync.reload({stream:true}));
+
+    watch({ glob: 'config/style-tile.yml' })
+      .pipe(yamlJSON())
+      .pipe(gulp.dest('.www/config'))
+      .pipe(browserSync.reload({stream:true}));
   });
 
   gulp.task('bower-copy-components', function () {
