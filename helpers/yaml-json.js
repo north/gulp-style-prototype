@@ -7,7 +7,7 @@ var chalk = require('chalk');
 
 module.exports.yaml2json = function (options) {
   return es.map(function (gulpFile, cb) {
-    if (gutil.isBuffer(gulpFile)) {
+    if (gutil.isBuffer(gulpFile._contents)) {
       gulpFile._contents = new Buffer(JSON.stringify(yaml.safeLoad(gulpFile._contents.toString('utf-8'))));
       gulpFile.path = gutil.replaceExtension(gulpFile.path, '.json');
     }
