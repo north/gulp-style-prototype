@@ -176,6 +176,138 @@ module.exports = function (gulp) {
   gulp.task('serve', ['server']);
 
   //////////////////////////////
+  // Init
+  //////////////////////////////
+  gulp.task('init', function () {
+    //////////////////////////////
+    // Watch
+    //////////////////////////////
+    gulp.src(dirs.js + '/**/*.js')
+      .pipe(jshint())
+      .pipe(jshint.reporter(stylish))
+      .pipe(gulp.dest('.www/' + dirs.js));
+
+    gulp.src(dirs.img + '/**/*')
+      .pipe(gulp.dest('.www/' + dirs.img));
+
+    gulp.src('.www/' + dirs.fonts + '/**/*' )
+      .pipe(gulp.dest('.www/' + dirs.fonts));
+
+    gulp.src('index.html' )
+      .pipe(gulp.dest('.www/'));
+
+    //////////////////////////////
+    // Sections
+    //////////////////////////////
+    gulp.src('config/sections.yml')
+      .pipe(yamlJSON())
+      .pipe(gulp.dest('.www/config'))
+      .pipe(buildMenu());
+
+    gulp.src('config/style-tile.yml' )
+      .pipe(yamlJSON())
+      .pipe(gulp.dest('.www/config'));
+
+    //////////////////////////////
+    // Bower Components
+    //////////////////////////////
+    gulp.src('bower_components/**/*')
+      .pipe(gulp.dest('.www/bower_components'));
+
+    //////////////////////////////
+    // Components
+    //////////////////////////////
+    var sections = yaml.safeLoad(fs.readFileSync('./config/sections.yml', 'utf8'));
+
+    Object.keys(sections).forEach(function (k) {
+      var dest = '.www/partials/' + k;
+      if (!fs.existsSync('.www')) {
+        fs.mkdirSync('.www');
+      }
+      if (!fs.existsSync('.www/partials')) {
+        fs.mkdirSync('.www/partials');
+      }
+      if (!fs.existsSync(dest)) {
+        fs.mkdirSync(dest);
+      }
+
+      gulp.src(k + '/**/*' )
+        .pipe(plumber())
+        .pipe(maid({folder: k}))
+        .pipe(folderwalk({
+          'base': k
+        }));
+
+      gulp.src(k + '/' + k +'.yml' )
+        .pipe(plumber())
+        .pipe(yamlJSON())
+        .pipe(gulp.dest('.tmp/scopes'))
+        .pipe(buildScope());
+    });
+
+    gulp.src('pages/**/*.yml' )
+      .pipe(plumber())
+      .pipe(yamlJSON())
+      .pipe(gulp.dest('.tmp/pages'))
+      .pipe(pagewalk())
+      .pipe(buildMenu());
+
+    //////////////////////////////
+    // Data
+    //////////////////////////////
+    gulp.src('.tmp/data/*.json')
+      .pipe(buildMenu());
+  });
+
+  //////////////////////////////
+  // Build
+  //////////////////////////////
+  gulp.task('build-clean', function () {
+    return gulp.src('.dist').pipe(clean());
+  });
+
+  gulp.task('build-copy', function () {
+    return gulp.src('.www/**/*').pipe(gulp.dest('.dist/'));
+  });
+
+  gulp.task('build-export', function () {
+    return gulp.src('.dist/**/*').pipe(gulp.dest('EXPORT/'));
+  })
+
+  gulp.task('build-deploy', function () {
+    var deploy = yaml.safeLoad(fs.readFileSync('./config/deploy.yml', 'utf8'));
+
+    return gulp.src('.dist')
+      .pipe(subtree({
+        remote: deploy.remote,
+        branch: deploy.branch,
+        message: deploy.message
+      }))
+      .pipe(clean());
+  });
+
+  gulp.task('build', function (cb) {
+    sequence(
+      'build-clean',
+      'build-copy'
+    );
+  });
+
+  gulp.task('export', function (cb) {
+    sequence(
+      'build',
+      'build-export'
+    );
+  });
+
+  gulp.task('deploy', function (cb) {
+    sequence(
+      'build',
+      'build-deploy'
+    );
+  });
+
+  //////////////////////////////
   // Default Task
   //////////////////////////////
   gulp.task('default', ['server']);
