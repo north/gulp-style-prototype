@@ -283,6 +283,12 @@ module.exports = function (gulp) {
   gulp.task('build-deploy', function () {
     var deploy = yaml.safeLoad(fs.readFileSync('./config/deploy.yml', 'utf8'));
 
+    if (deploy === undefined) {
+      deploy.remote = 'upstream';
+      deploy.branch = 'gh-pages';
+      deploy.message = 'Style Prototype Deploy';
+    }
+
     return gulp.src('.dist')
       .pipe(subtree({
         remote: deploy.remote,
