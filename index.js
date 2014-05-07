@@ -8,6 +8,7 @@ var subtree = require('gulp-subtree');
 var yaml = require('js-yaml');
 var fs = require('fs');
 var clean = require('gulp-clean');
+var sequence = require('run-sequence');
 
 var watch = require('gulp-watch');
 var plumber = require('gulp-plumber');
@@ -307,14 +308,16 @@ module.exports = function (gulp) {
 
   gulp.task('export', function (cb) {
     sequence(
-      'build',
+      'build-clean',
+      'build-copy',
       'build-export'
     );
   });
 
   gulp.task('deploy', function (cb) {
     sequence(
-      'build',
+      'build-clean',
+      'build-copy',
       'build-deploy'
     );
   });
