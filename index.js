@@ -178,7 +178,7 @@ module.exports = function (gulp) {
   //////////////////////////////
   // Init
   //////////////////////////////
-  gulp.task('init', function () {
+  gulp.task('build-init', function () {
     //////////////////////////////
     // Watch
     //////////////////////////////
@@ -258,6 +258,12 @@ module.exports = function (gulp) {
     gulp.src('.tmp/data/*.json')
       .pipe(buildMenu());
   });
+
+  gulp.task('build-compass', shell.task([
+    'bundle exec compass compile --time --css-dir=.www/' + dirs.css
+  ]));
+
+  gulp.task('init', ['build-compass', 'build-init']);
 
   //////////////////////////////
   // Build
