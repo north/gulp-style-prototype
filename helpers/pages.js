@@ -118,7 +118,11 @@ var pagewalk = function (options) {
             for (var j in fileConfig[inc.source]) {
               if (fileConfig[inc.source][j]) {
                 if (fileConfig[inc.source][j].id === inc.name) {
-                  includes.push(fileConfig[inc.source][j].path);
+                  var group = {
+                    'name': i,
+                    'path': fileConfig[inc.source][j].path
+                  }
+                  includes.push(group);
                 }
               }
             }
