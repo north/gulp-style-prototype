@@ -267,6 +267,26 @@ module.exports = function (gulp) {
   gulp.task('init', ['build-compass', 'build-init']);
 
   //////////////////////////////
+  // Refresh
+  //////////////////////////////
+  gulp.task('clean-tmp', function () {
+    return gulp.src('.tmp').pipe(clean());
+  });
+
+  gulp.task('clean-working', function () {
+    return gulp.src('.www').pipe(clean());
+  });
+
+  gulp.task('clean', ['clean-tmp', 'clean-working']);
+
+  gulp.task('refresh', function () {
+    sequence(
+      'clean',
+      'init'
+    );
+  });
+
+  //////////////////////////////
   // Build
   //////////////////////////////
   gulp.task('build-clean', function () {
