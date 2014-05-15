@@ -70,7 +70,7 @@ module.exports = function (gulp) {
   gulp.task('compass', function () {
     return gulp.src(paths.sass + '/**/*')
       .pipe(shell([
-        'compass watch --time --css-dir=.www/' + dirs.css
+        'bundle exec compass watch --time --css-dir=.www/' + dirs.css
       ]));
   });
 
