@@ -19,7 +19,7 @@ var dirTree = function (filename) {
   }
   name = name.replace('.json', '');
 
-  console.log(filename);
+  // console.log(filename);
   var base = filename.replace(path.basename(filename), '').split('/')[2];
 
   var menuName = name.replace(/--/g, '|&&|');
@@ -117,7 +117,7 @@ var pagewalk = function (options) {
           if (fileConfig[inc.source]) {
             for (var j in fileConfig[inc.source]) {
               if (fileConfig[inc.source][j]) {
-                if (fileConfig[inc.source][j].id === inc.name) {
+                if (fileConfig[inc.source][j].name === inc.name) {
                   var group = {
                     'name': i,
                     'path': fileConfig[inc.source][j].path
