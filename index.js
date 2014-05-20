@@ -14,6 +14,13 @@ var watch = require('gulp-watch');
 var plumber = require('gulp-plumber');
 var filter = require('gulp-filter');
 
+var usemin = require('gulp-usemin');
+var uglify = require('gulp-uglify');
+var cssmin = require('gulp-minify-css');
+var rev = require('gulp-rev');
+
+var imagemin = require('gulp-imagemin');
+var pngcrush = require('imagemin-pngcrush');
 
 var folderwalk = require('./helpers/exports.js').folderwalk;
 var yamlJSON = require('./helpers/yaml-json.js').yaml2json;
@@ -293,15 +300,42 @@ module.exports = function (gulp) {
     return gulp.src('.dist').pipe(clean());
   });
 
-  gulp.task('build-copy', function () {
-    return gulp.src('.www/**/*').pipe(gulp.dest('.dist/'));
+  gulp.task('build-copy-config', function () {
+    return gulp.src('.www/config/**/*').pipe(gulp.dest('.dist/config/'));
+  });
+
+  gulp.task('build-copy-partials', function () {
+    return gulp.src('.www/partials/**/*').pipe(gulp.dest('.dist/partials/'));
+  });
+
+  gulp.task('build-copy-fonts', function () {
+    return gulp.src('./fonts/**/*').pipe(gulp.dest('.dist/fonts/'));
   });
 
   gulp.task('build-export', function () {
     return gulp.src('.dist/**/*').pipe(gulp.dest('EXPORT/'));
   })
 
-  gulp.task('build-deploy', function () {
+  gulp.task('build-min', function () {
+    return gulp.src('.www/index.html')
+      .pipe(usemin({
+        css: [cssmin(), 'concat', rev()],
+        js: [uglify(), rev()]
+      }))
+      .pipe(gulp.dest('.dist/'));
+  });
+
+  gulp.task('build-images', function () {
+    return gulp.src('./images/**/*')
+      .pipe(imagemin({
+        progressive: true,
+        svgoPlugins: [{removeViewBox: false}],
+        use: [pngcrush()]
+      }))
+      .pipe(gulp.dest('.dist/images/'))
+  });
+
+  gulp.task('deploy', function () {
     var deploy = yaml.safeLoad(fs.readFileSync('./config/deploy.yml', 'utf8'));
 
     if (deploy === undefined) {
@@ -320,9 +354,9 @@ module.exports = function (gulp) {
   });
 
   gulp.task('build', function (cb) {
-    sequence(
+    return sequence(
       'build-clean',
-      'build-copy'
+      ['build-copy-config', 'build-copy-partials', 'build-copy-fonts', 'build-min', 'build-images']
     );
   });
 
@@ -334,13 +368,13 @@ module.exports = function (gulp) {
     );
   });
 
-  gulp.task('deploy', function (cb) {
-    sequence(
-      'build-clean',
-      'build-copy',
-      'build-deploy'
-    );
-  });
+  // gulp.task('deploy', function (cb) {
+  //   sequence(
+  //     'build-clean',
+  //     'build',
+  //     'build-deploy'
+  //   );
+  // });
 
   //////////////////////////////
   // Default Task

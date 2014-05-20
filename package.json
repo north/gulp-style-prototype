@@ -54,6 +54,12 @@
     "walk": "^2.3.1",
     "gulp-util": "^2.2.14",
     "fs-extra": "^0.8.1",
-    "run-sequence": "^0.3.6"
+    "run-sequence": "^0.3.6",
+    "gulp-minify-css": "^0.3.4",
+    "gulp-rev": "^0.4.0",
+    "gulp-usemin": "^0.3.3",
+    "gulp-uglify": "^0.3.0",
+    "gulp-imagemin": "^0.5.0",
+    "imagemin-pngcrush": "^0.1.0"
   }
 }
