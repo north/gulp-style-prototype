@@ -360,6 +360,15 @@ module.exports = function (gulp) {
     );
   });
 
+  //gulp deploy fails silently (oh javascript) if .dist/ is not not already built... 
+  gulp.task('build-deploy', function (cb) {
+    return sequence(
+      'build-clean',
+      ['build-copy-config', 'build-copy-partials', 'build-copy-fonts', 'build-min', 'build-images'],
+      'deploy'
+    );
+  });
+
   gulp.task('export', function (cb) {
     sequence(
       'build-clean',
