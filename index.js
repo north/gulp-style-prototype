@@ -29,6 +29,8 @@ var buildMenu = require('./helpers/menu.js').buildMenu;
 var pagewalk = require('./helpers/pages.js').pagewalk;
 var maid = require('./helpers/maid.js').maid;
 
+var cache = require('gulp-cached');
+
 module.exports = function (gulp) {
   gulp.task('pages', function () {
     gulp.src('pages/**/*.yml')
@@ -41,6 +43,7 @@ module.exports = function (gulp) {
 
   gulp.task('sections', function () {
     watch({ glob: 'config/sections.yml'})
+      .pipe(cache('sections'))
       .pipe(yamlJSON())
       .pipe(gulp.dest('.www/config'))
       .pipe(buildMenu())
@@ -100,6 +103,7 @@ module.exports = function (gulp) {
       }
 
       watch({ glob: k + '/**/*' })
+        .pipe(cache(k))
         .pipe(plumber())
         .pipe(maid({folder: k}))
         .pipe(folderwalk({
@@ -108,6 +112,7 @@ module.exports = function (gulp) {
         .pipe(browserSync.reload({stream:true}));
 
       watch({ glob: k + '/' + k +'.yml' })
+        .pipe(cache(k + '-yml'))
         .pipe(plumber())
         .pipe(yamlJSON())
         .pipe(gulp.dest('.tmp/scopes'))
@@ -116,6 +121,7 @@ module.exports = function (gulp) {
     });
 
     watch({ glob: 'pages/**/*.yml' })
+      .pipe(cache('pages'))
       .pipe(plumber())
       .pipe(yamlJSON())
       .pipe(gulp.dest('.tmp/pages'))
