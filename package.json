@@ -59,6 +59,7 @@
     "jshint-stylish": "^0.1.5",
     "jsonfile": "^1.1.1",
     "path": "^0.4.9",
+    "rimraf": "^2.2.8",
     "run-sequence": "^0.3.6",
     "underscore.string": "^2.3.3",
     "walk": "^2.3.1"
