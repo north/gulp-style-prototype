@@ -49,7 +49,7 @@ module.exports = function (gulp) {
     scopes: [],
     configFile: 'config/files.json',
     configMenu: 'config/menu.json',
-    configScope: 'config/scope.json'
+    configScope: 'config/scopes.json'
   }
 
   sp__sections.forEach(function (v, k) {
@@ -62,9 +62,12 @@ module.exports = function (gulp) {
   //////////////////////////////
   // Server Tasks
   //////////////////////////////
-  gulp.task('serve', ['watch', 'watch-components', 'watch-scopes', 'watch-compass', 'browser-sync']);
+  gulp.task('serve', ['bcc', 'watch', 'watch-components', 'watch-scopes', 'watch-compass', 'browser-sync']);
   gulp.task('server', ['serve']);
 
+  //////////////////////////////
+  // Refresh the server
+  //////////////////////////////
   gulp.task('refresh', function (cb) {
     return sequence('clean-server',
                     'build-server',
@@ -72,7 +75,23 @@ module.exports = function (gulp) {
                     cb);
   });
 
-  // gulp.task('refresh', ['clean-server', 'build-server', 'build-config']);
+  //////////////////////////////
+  // Refresh and run the server
+  //////////////////////////////
+  gulp.task('default', function (cb) {
+    return sequence('refresh',
+                    'serve',
+                    cb);
+  });
+
+  //////////////////////////////
+  // Copy Bower Components
+  //////////////////////////////
+  gulp.task('bower-copy-components', function () {
+    return gulp.src('bower_components/**/*')
+      .pipe(gulp.dest(sp__paths.server + 'bower_components'));
+  });
+  gulp.task('bcc', ['bower-copy-components']);
 
   //////////////////////////////
   // Browser Sync
@@ -138,7 +157,7 @@ module.exports = function (gulp) {
     });
 
     build.menuJSON(sp__paths.partials, function (menu) {
-      fs.outputJSON(sp__paths.server + sp__paths.configMenu);
+      fs.outputJSON(sp__paths.server + sp__paths.configMenu, menu);
       gutil.log('Updated menu information');
 
       if (close < 2) {
@@ -150,7 +169,7 @@ module.exports = function (gulp) {
     });
 
     build.scopeJSON(function (scope) {
-      fs.outputJSON(sp__paths.server + sp__paths.configScope);
+      fs.outputJSON(sp__paths.server + sp__paths.configScope, scope);
       gutil.log('Updated scope information');
 
       if (close < 2) {
@@ -330,6 +349,7 @@ module.exports = function (gulp) {
           // If a file is changed or added, copy it over
           if (event.type === 'changed' || event.type === 'added') {
             fs.copySync('./' + filePath, sp__paths.partials + filePath);
+            reload();
           }
           // If a file is deleted, remove it
           else if (event.type === 'deleted') {
