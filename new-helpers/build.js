@@ -60,8 +60,10 @@ var buildMenuJSON = function (directory, cb) {
 
   // Get the files and folders
   parse.folders(directory, function (folders) {
+
     // Builds basic folder information
     folders.forEach(function (v) {
+
       var pattern = patterns.info(v);
       var id = pattern.id;
       var group = pattern.group;
@@ -97,6 +99,7 @@ var buildMenuJSON = function (directory, cb) {
 
 
     parse.files(directory, function (files) {
+
       // Sorts files into their groups
       files.forEach(function (v) {
         var pattern = patterns.info(v);
