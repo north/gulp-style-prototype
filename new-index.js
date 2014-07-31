@@ -121,6 +121,13 @@ module.exports = function (gulp) {
     // Move Partials over
     sp__sections.forEach(function (v) {
       fs.copySync(v, sp__paths.partials + v);
+
+      // Plugins
+      if (sp__sectionsConfig[v].plugins) {
+        sp__sectionsConfig[v].plugins.forEach(function (p) {
+          fs.copySync(p, sp__paths.partials + v);
+        });
+      }
     });
 
     // Move Assets over
