@@ -32,7 +32,7 @@ var parseDirectoryFolders = function (directory, cb) {
 //////////////////////////////
 // Parses a directory's files
 //////////////////////////////
-var parseDirectoryFiles = function (directory, cb) {
+var parseDirectoryFiles = function (directory, extensions, cb) {
   // Create output
   var output = [];
   // Parse the directory
@@ -47,7 +47,7 @@ var parseDirectoryFiles = function (directory, cb) {
     else {
       files.forEach(function (f) {
         // Push files onto the output tree
-        if (path.extname(f) === '.html') {
+        if (extensions.indexOf(path.extname(f)) >= 0 ) {
           output.push(f.replace(directory, ''));
         }
       });
