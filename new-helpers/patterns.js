@@ -14,6 +14,10 @@ var titleizeFile = function (name) {
 // Build Pattern Information
 //////////////////////////////
 var buildPatternInfo = function (file) {
+  if (file.charAt(0) === '/') {
+    file = file.substr(1);
+  }
+
   var ext = path.extname(file);
   // Do the initial split
   var position = process.cwd();
