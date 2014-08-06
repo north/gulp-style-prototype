@@ -244,13 +244,27 @@ var buildPagesJSON = function (directory, cb) {
 }
 
 var buildMenu = function (sp__paths, cb) {
+  var done = false;
   buildMenuJSON(sp__paths.partials, ['.html'],  function (menu) {
-    buildMenuJSON(sp__paths.server + sp__paths.demos, ['.json'], function (pages) {
-      menu = menu.concat(pages);
-
+    if (done === false) {
+      done = menu;
+    }
+    else {
+      menu = menu.concat(done);
       return cb(menu);
+    }
+  });
 
-    });
+  buildMenuJSON(sp__paths.server + sp__paths.demos, ['.json'], function (pages) {
+
+    if (done === false) {
+      done = pages;
+    }
+    else {
+      done = done.concat(pages);
+      return cb(done);
+    }
+
   });
 }
 
