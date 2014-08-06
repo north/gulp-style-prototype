@@ -16,6 +16,7 @@ var fs = require('fs-extra'),
     reload = browserSync.reload,
     execSync = require('execSync'),
     sequence = require('run-sequence'),
+    YAML = require('yamljs'),
     gutil = require('gulp-util');
 
 //////////////////////////////
@@ -26,7 +27,7 @@ var build = require('./new-helpers/build.js'),
     patterns = require('./new-helpers/patterns.js'),
     sortBy = require('./new-helpers/sortby.js'),
     time = require('./new-helpers/time.js'),
-    yamlJSON = require('./helpers/yaml-json.js');
+    yamlJSON = require('./helpers/yaml-json.js').yaml2json;
 
 //////////////////////////////
 // Exports
@@ -73,7 +74,7 @@ module.exports = function (gulp) {
   //////////////////////////////
   gulp.task('refresh', function (cb) {
     return sequence('clean-server',
-		    ['build-server', 'build-pages'],
+                    ['build-server', 'build-pages'],
                     'build-config',
                     cb);
   });
@@ -149,16 +150,25 @@ module.exports = function (gulp) {
   });
 
   //////////////////////////////
+  // Build Pages
+  //////////////////////////////
+  gulp.task('build-pages', function () {
+    return gulp.src('pages/**/*')
+      .pipe(yamlJSON())
+      .pipe(gulp.dest(sp__paths.server + sp__paths.pages));
+  });
+
+  //////////////////////////////
   // Build Config
   //////////////////////////////
   gulp.task('build-config', function (cb) {
     var close = 0;
 
-    build.fileJSON(sp__paths.partials, function (files) {
+    build.fileJSON(sp__paths.partials, ['.html'], function (files) {
       fs.outputJSON(sp__paths.server + sp__paths.configFile, files);
       gutil.log('Updated file listing');
 
-      if (close < 2) {
+      if (close < 3) {
         close++;
       }
       else {
@@ -166,11 +176,26 @@ module.exports = function (gulp) {
       }
     });
 
-    build.menuJSON(sp__paths.partials, function (menu) {
+    build.fileJSON(sp__paths.server + sp__paths.demos + '/', ['.json'], function (files) {
+      files.pages.forEach(function (v, k) {
+        files.pages[k].path = v.path.replace('partials/', 'demos/');
+      });
+      fs.outputJSON(sp__paths.server + sp__paths.configPages, files);
+      gutil.log('Updated pages listing');
+
+        if (close < 3) {
+          close++;
+        }
+        else {
+          cb();
+        }
+    });
+
+    build.menu(sp__paths, function (menu) {
       fs.outputJSON(sp__paths.server + sp__paths.configMenu, menu);
       gutil.log('Updated menu information');
 
-      if (close < 2) {
+      if (close < 3) {
         close++;
       }
       else {
@@ -182,7 +207,7 @@ module.exports = function (gulp) {
       fs.outputJSON(sp__paths.server + sp__paths.configScope, scope);
       gutil.log('Updated scope information');
 
-      if (close < 2) {
+      if (close < 3) {
         close++;
       }
       else {
@@ -232,7 +257,7 @@ module.exports = function (gulp) {
     // Sections
     var watchSections = gulp.watch('config/sections.yml');
     watchSections.on('change', function (event) {
-      build.menuJSON(sp__paths.partials, function (menu) {
+      build.menu(sp__paths,  function (menu) {
         fs.outputJSON(sp__paths.server + sp__paths.configMenu, menu);
         gutil.log('Updated menu information');
         reload();
@@ -336,6 +361,56 @@ module.exports = function (gulp) {
       });
   });
 
+
+  //////////////////////////////
+  // Watch Pages
+  //////////////////////////////
+  gulp.task('watch-pages', function() {
+    return gulp.watch(sp__paths.pages)
+      .on('change', function (event) {
+        var start = process.hrtime();
+        var end = false;
+        //////////////////////////////
+        // Determine relative path and extension
+        //////////////////////////////
+        var filePath = event.path.replace(process.cwd() + '/', '');
+        var ext = path.extname(filePath);
+        var noun = (ext === '') ? 'Folder' : 'File';
+
+        // User feedback, something happened!
+        gutil.log(noun + ' ' + gutil.colors.magenta('./' + filePath) + ' was ' + gutil.colors.cyan(event.type));
+
+        if (ext === '.yml' || ext === '.html') {
+          // If a file is changed or added, copy it over
+          if (event.type === 'changed' || event.type === 'added') {
+            if (ext === '.html') {
+              fs.copySync('./' + filePath, sp__paths.server + sp__paths.pages + '/' + filePath);
+            }
+            else {
+              var contents = YAML.load(filePath);
+              if (contents !== null) {
+                fs.outputJSONSync(sp__paths.server + '/' + filePath.replace(ext, '.json'), contents);
+              }
+            }
+
+            reload();
+          }
+          // If a file is deleted, remove it
+          else if (event.type === 'deleted') {
+            if (ext === '.html') {
+              fs.removeSync(sp__paths.server + '/' + filePath);
+            }
+            else {
+              fs.removeSync(sp__paths.server + '/' + filePath.replace(ext, '.json'));
+            }
+          }
+
+          // Provide user feedback
+          // gutil.log(patterns.titleize(event.type) + ' ' + gutil.colors.magenta(sp__paths.partials + filePath));
+        }
+      })
+  });
+
   //////////////////////////////
   // Watch Components
   //////////////////////////////
@@ -382,7 +457,7 @@ module.exports = function (gulp) {
         // If an HTML file or a folder has been added, rebuild the associated JSON
         if (ext === '.html' || ext === '') {
           if (event.type === 'added' || event.type === 'deleted') {
-            build.fileJSON(sp__paths.partials, function (fileJSON) {
+            build.fileJSON(sp__paths.partials, ['.html'], function (fileJSON) {
                 fs.outputJSON(sp__paths.server + sp__paths.configFile, fileJSON);
                 gutil.log('Updated file listing');
                 if (end === false) {
@@ -394,9 +469,10 @@ module.exports = function (gulp) {
                 }
 
             });
-            build.menuJSON(sp__paths.partials, function (menu) {
+            build.menu(sp__paths, function (menu) {
               fs.outputJSON(sp__paths.server + sp__paths.configMenu, menu);
               gutil.log('Updated menu information');
+
               if (end === false) {
                 end = true;
               }
