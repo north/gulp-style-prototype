@@ -7,7 +7,7 @@ var _s = require('underscore.string'),
 // Titleize File Name
 //////////////////////////////
 var titleizeFile = function (name) {
-  return _s.titleize(name.replace('--', ' - ').replace('__', '- '));
+  return _s.titleize(name.replace(/\b-\b/g, ' ').replace(/--/g, ' - ').replace(/__/g, ' - '));
 }
 
 //////////////////////////////
