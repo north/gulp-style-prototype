@@ -15,28 +15,36 @@ var loadSections = function () {
 //////////////////////////////
 // Build the File listing
 //////////////////////////////
-var buildFileJSON = function (directory, cb) {
-  var start = process.hrtime(),
-      sections = Object.keys(loadSections());
+var buildFileJSON = function (directory, extensions, cb) {
+  var start = process.hrtime();
 
-  parse.files(directory, function (files) {
+  // console.log(directory);
+
+  parse.files(directory, extensions, function (files) {
     var output = {};
 
-    // Create an array for each section
-    sections.forEach(function (section) {
-      output[section] = [];
-    });
+    // // Create an array for each section
+    // sections.forEach(function (section) {
+    //   output[section] = [];
+    // });
 
     // console.log(output);
 
     // Loop over each file and push its pattern into the section
     files.forEach(function (file) {
-      if (path.extname(file) === '.html') {
+      if (extensions.indexOf(path.extname(file)) >= 0 ) {
         var pattern = patterns.info(file),
             section = pattern.section;
 
+
+        // console.log(pattern);
+
         // console.log(section);
         // Push the pattern into the correct section
+        if (!output[section]) {
+          output[section] = [];
+        }
+
         output[section].push(pattern);
       }
     });
@@ -50,7 +58,7 @@ var buildFileJSON = function (directory, cb) {
 //////////////////////////////
 // Build the Menu
 //////////////////////////////
-var buildMenuJSON = function (directory, cb) {
+var buildMenuJSON = function (directory, extensions, cb) {
   var start = process.hrtime(),
       sections = loadSections(),
       folderHolder = {},
@@ -98,7 +106,7 @@ var buildMenuJSON = function (directory, cb) {
     });
 
 
-    parse.files(directory, function (files) {
+    parse.files(directory, extensions, function (files) {
 
       // Sorts files into their groups
       files.forEach(function (v) {
@@ -107,6 +115,7 @@ var buildMenuJSON = function (directory, cb) {
           title: pattern.title,
           href: '#/' + pattern.section + '?id=' + pattern.id
         }
+
 
         if (pattern.group === '') {
           folderHolder[pattern.section].submenu.push(item);
@@ -124,7 +133,13 @@ var buildMenuJSON = function (directory, cb) {
         var group = folder.group;
 
         if (folder.group === '') {
-          folder.title = sections[k].title;
+          if (sections[k] && sections[k].title) {
+            folder.title = sections[k].title;
+          }
+          else {
+            folder.title = patterns.titleize(k);
+          }
+          // console.log(folder.title);
           folderSort[k] = folder;
           delete folderHolder[k];
         }
@@ -209,6 +224,36 @@ var buildScopeJSON = function (cb) {
   return cb(scopes);
 }
 
+var buildPagesJSON = function (directory, cb) {
+  var output = [];
+
+  parse.pages(directory, function (pages) {
+    pages.forEach(function (page) {
+      var load = yaml.safeLoad(fs.readFileSync('./' + directory + '/' + page, 'utf8')),
+          pattern = patterns.info(page);
+
+      delete pattern.path;
+      if (load !== undefined) {
+        pattern.content = load;
+        output.push(pattern);
+      }
+    });
+
+    return cb(output);
+  });
+}
+
+var buildMenu = function (sp__paths, cb) {
+  buildMenuJSON(sp__paths.partials, ['.html'],  function (menu) {
+    buildMenuJSON(sp__paths.server + sp__paths.demos, ['.json'], function (pages) {
+      menu = menu.concat(pages);
+
+      return cb(menu);
+
+    });
+  });
+}
+
 //////////////////////////////
 // Exports
 //////////////////////////////
@@ -216,3 +261,5 @@ module.exports.loadSections = loadSections;
 module.exports.fileJSON = buildFileJSON;
 module.exports.menuJSON = buildMenuJSON;
 module.exports.scopeJSON = buildScopeJSON;
+module.exports.pagesJSON = buildPagesJSON;
+module.exports.menu = buildMenu;
