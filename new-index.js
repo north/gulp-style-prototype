@@ -44,12 +44,15 @@ module.exports = function (gulp) {
     fonts: dirs.fonts + '/**/*',
     sass: dirs.sass + '/**/*',
     css: dirs.css + '/**/*.css',
+    demos: 'demos',
+    pages: 'demos/pages',
     index: 'index.html',
     components: [],
     scopes: [],
     configFile: 'config/files.json',
     configMenu: 'config/menu.json',
-    configScope: 'config/scopes.json'
+    configScope: 'config/scopes.json',
+    configPages: 'config/pages.json'
   }
 
   sp__sections.forEach(function (v, k) {
@@ -70,7 +73,7 @@ module.exports = function (gulp) {
   //////////////////////////////
   gulp.task('refresh', function (cb) {
     return sequence('clean-server',
-                    'build-server',
+		    ['build-server', 'build-pages'],
                     'build-config',
                     cb);
   });
