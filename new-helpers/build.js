@@ -58,7 +58,7 @@ var buildFileJSON = function (directory, extensions, cb) {
 //////////////////////////////
 // Build the Menu
 //////////////////////////////
-var buildMenuJSON = function (directory, extensions, cb) {
+var buildMenuJSON = function (directory, extensions, all, cb) {
   var start = process.hrtime(),
       sections = loadSections(),
       folderHolder = {},
@@ -156,11 +156,15 @@ var buildMenuJSON = function (directory, extensions, cb) {
         var group = folder.group;
 
         if (folderReverse[group]) {
+          var subMenu = folder.submenu.sort(function (a, b) {
+                return sortBy.title(a, b);
+              });
+          if (all) {
+            subMenu = subMenu.concat(folder.all);
+          };
           folderReverse[group].submenu.push({
             title: folder.title,
-            submenu: folder.submenu.sort(function (a, b) {
-              return sortBy.title(a, b);
-            }).concat(folder.all)
+            submenu: subMenu
           });
           delete folderReverse[k];
         }
@@ -172,11 +176,15 @@ var buildMenuJSON = function (directory, extensions, cb) {
         var group = folder.group;
 
         if (folderSort[group]) {
+          var subMenu = folder.submenu.sort(function (a, b) {
+                return sortBy.title(a, b);
+              });
+          if (all) {
+            subMenu = subMenu.concat(folder.all);
+          };
           folderSort[group].submenu.push({
             title: folder.title,
-            submenu: folder.submenu.sort(function (a, b) {
-              return sortBy.title(a, b);
-            }).concat(folder.all)
+            submenu: subMenu
           });
         }
       }
@@ -184,14 +192,18 @@ var buildMenuJSON = function (directory, extensions, cb) {
       // Core folders
       for (var k in folderSort) {
         var folder = folderSort[k];
+        var subMenu = folder.submenu.sort(function (a, b) {
+              return sortBy.title(a, b);
+            });
+        if (all) {
+          subMenu = subMenu.concat(folder.all);
+        };
 
         if (folder.submenu.length) {
           output.push({
             title: folder.title,
-            submenu: folder.submenu.sort(function (a, b) {
-              return sortBy.title(a, b);
-            }).concat(folder.all)
-          })  ;
+            submenu: subMenu
+          });
         }
       }
 
@@ -245,7 +257,7 @@ var buildPagesJSON = function (directory, cb) {
 
 var buildMenu = function (sp__paths, cb) {
   var done = false;
-  buildMenuJSON(sp__paths.partials, ['.html'],  function (menu) {
+  buildMenuJSON(sp__paths.partials, ['.html'], true,  function (menu) {
     if (done === false) {
       done = menu;
     }
@@ -255,7 +267,7 @@ var buildMenu = function (sp__paths, cb) {
     }
   });
 
-  buildMenuJSON(sp__paths.server + sp__paths.demos, ['.json'], function (pages) {
+  buildMenuJSON(sp__paths.server + sp__paths.demos, ['.json'], false, function (pages) {
 
     if (done === false) {
       done = pages;
