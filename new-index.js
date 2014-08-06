@@ -66,7 +66,7 @@ module.exports = function (gulp) {
   //////////////////////////////
   // Server Tasks
   //////////////////////////////
-  gulp.task('serve', ['bcc', 'watch', 'watch-components', 'watch-scopes', 'watch-compass', 'browser-sync']);
+  gulp.task('serve', ['bcc', 'watch', 'watch-components', 'watch-pages', 'watch-scopes', 'watch-compass', 'browser-sync']);
   gulp.task('server', ['serve']);
 
   //////////////////////////////
@@ -366,7 +366,7 @@ module.exports = function (gulp) {
   // Watch Pages
   //////////////////////////////
   gulp.task('watch-pages', function() {
-    return gulp.watch(sp__paths.pages)
+    return gulp.watch('pages/**/*')
       .on('change', function (event) {
         var start = process.hrtime();
         var end = false;
@@ -384,31 +384,51 @@ module.exports = function (gulp) {
           // If a file is changed or added, copy it over
           if (event.type === 'changed' || event.type === 'added') {
             if (ext === '.html') {
-              fs.copySync('./' + filePath, sp__paths.server + sp__paths.pages + '/' + filePath);
+              fs.copySync('./' + filePath, sp__paths.server + sp__paths.demos + '/' + filePath);
             }
             else {
               var contents = YAML.load(filePath);
+              filePath = filePath.replace(ext, '.json');
               if (contents !== null) {
-                fs.outputJSONSync(sp__paths.server + '/' + filePath.replace(ext, '.json'), contents);
+                fs.outputJSONSync(sp__paths.server + sp__paths.demos + '/' + filePath, contents);
               }
             }
-
             reload();
           }
           // If a file is deleted, remove it
           else if (event.type === 'deleted') {
-            if (ext === '.html') {
-              fs.removeSync(sp__paths.server + '/' + filePath);
-            }
-            else {
-              fs.removeSync(sp__paths.server + '/' + filePath.replace(ext, '.json'));
-            }
+            filePath = filePath.replace(ext, '.json');
+            fs.removeSync(sp__paths.server + sp__paths.demos + '/' + filePath);
           }
 
           // Provide user feedback
-          // gutil.log(patterns.titleize(event.type) + ' ' + gutil.colors.magenta(sp__paths.partials + filePath));
+          gutil.log(patterns.titleize(event.type) + ' ' + gutil.colors.magenta(sp__paths.server + sp__paths.demos + '/' + filePath));
+
+          // Build Files
+          if (event.type === 'added' || event.type === 'deleted') {
+            build.fileJSON(sp__paths.server + sp__paths.demos + '/', ['.json'], function (files) {
+              files.pages.forEach(function (v, k) {
+                files.pages[k].path = v.path.replace('partials/', 'demos/');
+              });
+              fs.outputJSON(sp__paths.server + sp__paths.configPages, files);
+              gutil.log('Updated pages listing');
+
+            });
+            build.menu(sp__paths, function (menu) {
+              fs.outputJSON(sp__paths.server + sp__paths.configMenu, menu);
+              gutil.log('Updated menu information');
+
+              if (end === false) {
+                end = true;
+              }
+              else {
+                time.elapsed(start, 'watch-pages');
+                reload();
+              }
+            });
+          }
         }
-      })
+      });
   });
 
   //////////////////////////////
