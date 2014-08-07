@@ -3,6 +3,11 @@ gulp-style-prototype
 
 Gulp Tasks for Style Prototypes
 
+## Installation
+
+For setting up a new Style Prototype generator, see [these instructions](https://github.com/north/generator-Style-Prototype#installation).
+
+
 ## Usage
 
 ```javascript
