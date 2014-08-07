@@ -6,10 +6,10 @@ var parse = require('./parse.js'),
     sortBy = require('./sortby.js'),
     fs = require('fs-extra'),
     path = require('path'),
-    yaml = require('js-yaml');
+    yaml = require('yamljs');
 
 var loadSections = function () {
-  return yaml.safeLoad(fs.readFileSync('./config/sections.yml', 'utf8'));
+  return yaml.load('./config/sections.yml');
 }
 
 //////////////////////////////
@@ -225,7 +225,7 @@ var buildScopeJSON = function (cb) {
     fs.existsSync
     var path = './' + v + '/' + v +'.yml';
     if (fs.existsSync(path)) {
-      var load = yaml.safeLoad(fs.readFileSync('./' + v + '/' + v +'.yml', 'utf8'));
+      var load = yaml.load('./' + v + '/' + v +'.yml');
       if (load[v] !== undefined) {
         scopes[v] = load[v];
       }
@@ -241,7 +241,7 @@ var buildPagesJSON = function (directory, cb) {
 
   parse.pages(directory, function (pages) {
     pages.forEach(function (page) {
-      var load = yaml.safeLoad(fs.readFileSync('./' + directory + '/' + page, 'utf8')),
+      var load = yaml.load('./' + directory + '/' + page),
           pattern = patterns.info(page);
 
       delete pattern.path;
