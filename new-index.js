@@ -389,10 +389,8 @@ module.exports = function (gulp) {
             else {
               var contents = YAML.load(filePath);
               filePath = filePath.replace(ext, '.json');
-              if (contents !== null) {
-                fs.outputJSONSync(sp__paths.server + sp__paths.demos + '/' + filePath, contents);
-              }
-            }
+              fs.outputJSONSync(sp__paths.server + sp__paths.demos + '/' + filePath, contents);
+          }
             reload();
           }
           // If a file is deleted, remove it
