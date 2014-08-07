@@ -1,389 +1,601 @@
-var jshint = require('gulp-jshint');
-var stylish = require('jshint-stylish');
-var paths = require('compass-options').paths();
-var dirs = require('compass-options').dirs();
-var browserSync = require('browser-sync');
-var shell = require('gulp-shell');
-var subtree = require('gulp-subtree');
-var yaml = require('js-yaml');
-var fs = require('fs');
-var clean = require('gulp-clean');
-var sequence = require('run-sequence');
+'use strict';
 
-var watch = require('gulp-watch');
-var plumber = require('gulp-plumber');
-var filter = require('gulp-filter');
+//////////////////////////////
+// Node Dependencies
+//////////////////////////////
+var fs = require('fs-extra'),
+    rimraf = require('rimraf'),
+    path = require('path'),
+    jshint = require('gulp-jshint'),
+    stylish = require('jshint-stylish'),
+    dirs = require('compass-options').dirs(),
+    cache = require('gulp-cached'),
+    shell = require('gulp-shell'),
+    browserSync = require('browser-sync'),
+    reload = browserSync.reload,
+    execSync = require('execSync'),
+    sequence = require('run-sequence'),
+    yaml = require('yamljs'),
+    usemin = require('gulp-usemin'),
+    uglify = require('gulp-uglify'),
+    minifyCSS = require('gulp-minify-css'),
+    rev = require('gulp-rev'),
+    imagemin = require('gulp-imagemin'),
+    pngcrush = require('imagemin-pngcrush'),
+    gutil = require('gulp-util');
 
-var usemin = require('gulp-usemin');
-var uglify = require('gulp-uglify');
-var cssmin = require('gulp-minify-css');
-var rev = require('gulp-rev');
+//////////////////////////////
+// Helpers
+//////////////////////////////
+var build = require('./helpers/build.js'),
+    parse = require('./helpers/parse.js'),
+    patterns = require('./helpers/patterns.js'),
+    sortBy = require('./helpers/sortby.js'),
+    time = require('./helpers/time.js'),
+    yamlJSON = require('./helpers/yaml-json.js');
 
-var imagemin = require('gulp-imagemin');
-var pngcrush = require('imagemin-pngcrush');
-
-var folderwalk = require('./helpers/exports.js').folderwalk;
-var yamlJSON = require('./helpers/yaml-json.js').yaml2json;
-var buildScope = require('./helpers/menu.js').buildScope;
-var buildMenu = require('./helpers/menu.js').buildMenu;
-var pagewalk = require('./helpers/pages.js').pagewalk;
-var maid = require('./helpers/maid.js').maid;
-
-var cache = require('gulp-cached');
-
+//////////////////////////////
+// Exports
+//////////////////////////////
 module.exports = function (gulp) {
-  gulp.task('pages', function () {
-    gulp.src('pages/**/*.yml')
-      .pipe(plumber())
-      .pipe(yamlJSON())
-      .pipe(gulp.dest('.tmp/pages'))
-      .pipe(pagewalk())
-      .pipe(browserSync.reload({stream:true}));
+  //////////////////////////////
+  // Setup Variables
+  //////////////////////////////
+  var sp__deploy = yaml.load('./config/deploy.yml');
+  var sp__sectionsConfig = build.loadSections();
+  var sp__sections = Object.keys(sp__sectionsConfig);
+  var sp__paths = {
+    server: '.www/',
+    js: dirs.js + '/**/*.js',
+    img: dirs.img + '/**/*',
+    fonts: dirs.fonts + '/**/*',
+    sass: dirs.sass + '/**/*',
+    css: dirs.css + '/**/*.css',
+    demos: 'demos',
+    pages: 'demos/pages',
+    index: 'index.html',
+    dist: '.dist/',
+    components: [],
+    scopes: [],
+    configFile: 'config/files.json',
+    configMenu: 'config/menu.json',
+    configScope: 'config/scopes.json',
+    configPages: 'config/pages.json'
+  }
+
+  sp__sections.forEach(function (v, k) {
+    sp__paths.scopes.push(v + '/' + v + '.json');
+    sp__paths.components.push(v + '/**/*');
   });
 
-  gulp.task('sections', function () {
-    watch({ glob: 'config/sections.yml'})
-      .pipe(cache('sections'))
-      .pipe(yamlJSON())
-      .pipe(gulp.dest('.www/config'))
-      .pipe(buildMenu())
-      .pipe(browserSync.reload({stream:true}));
+  sp__paths.partials = sp__paths.server + 'partials/';
 
-    watch({ glob: 'config/style-tile.yml' })
-      .pipe(yamlJSON())
-      .pipe(gulp.dest('.www/config'))
-      .pipe(browserSync.reload({stream:true}));
+  if (sp__deploy === undefined) {
+    deploy.remote = 'upstream';
+    deploy.branch = 'gh-pages';
+    deploy.message = 'Style Prototype Deploy';
+    deploy.export = 'export' ;
+  }
+
+  //////////////////////////////
+  // Server Tasks
+  //////////////////////////////
+  gulp.task('serve', ['watch', 'watch-components', 'watch-pages', 'watch-scopes', 'watch-compass', 'browser-sync']);
+  gulp.task('server', ['serve']);
+
+  //////////////////////////////
+  // Refresh the server
+  //////////////////////////////
+  gulp.task('refresh', function (cb) {
+    return sequence('clean-server',
+                    ['build-server', 'build-pages', 'bcc'],
+                    'build-config',
+                    cb);
   });
 
+  //////////////////////////////
+  // Refresh and run the server
+  //////////////////////////////
+  gulp.task('default', function (cb) {
+    return sequence('refresh',
+                    'serve',
+                    cb);
+  });
+
+  //////////////////////////////
+  // Copy Bower Components
+  //////////////////////////////
   gulp.task('bower-copy-components', function () {
-    gulp.src('bower_components/**/*')
-      .pipe(gulp.dest('.www/bower_components'));
+    return gulp.src('bower_components/**/*')
+      .pipe(gulp.dest(sp__paths.server + 'bower_components'));
   });
-
   gulp.task('bcc', ['bower-copy-components']);
 
   //////////////////////////////
-  // Begin Gulp Tasks
+  // Browser Sync
   //////////////////////////////
-  gulp.task('lint', function () {
-    return gulp.src([
-        paths.js + '/**/*.js',
-        '!' + paths.js + '/**/*.js'
-      ])
-      .pipe(jshint())
-      .pipe(jshint.reporter(stylish));
+  gulp.task('browser-sync', function() {
+    browserSync.init(null, {
+        server: {
+            baseDir: sp__paths.server
+        }
+    });
+  });
+
+  //////////////////////////////
+  // Clean Working Directory
+  //////////////////////////////
+  gulp.task('clean-server', function (cb) {
+    rimraf(sp__paths.server, cb);
+  });
+
+  //////////////////////////////
+  // Initial Server Build
+  //////////////////////////////
+  gulp.task('build-server', function (cb) {
+    var assets = ['js', 'img', 'fonts'],
+        compass;
+
+    // Move Partials over
+    sp__sections.forEach(function (v) {
+      fs.copySync(v, sp__paths.partials + v);
+
+      // Plugins
+      if (sp__sectionsConfig[v].plugins) {
+        sp__sectionsConfig[v].plugins.forEach(function (p) {
+          fs.copySync(p, sp__paths.partials + v);
+        });
+      }
+    });
+
+    // Move Assets over
+    assets.forEach(function (v) {
+      fs.copySync(dirs[v], sp__paths.server + '/' + dirs[v]);
+    });
+
+    // Move Index over
+    fs.copySync('index.html', sp__paths.server + '/index.html');
+
+    // Compile Sasss
+    compass = execSync.exec('bundle exec compass compile --force --time --css-dir=.www/' + dirs.css);
+    gutil.log(compass.stdout);
+
+    cb();
+  });
+
+  //////////////////////////////
+  // Build Pages
+  //////////////////////////////
+  gulp.task('build-pages', function () {
+    return gulp.src('pages/**/*')
+      .pipe(yamlJSON())
+      .pipe(gulp.dest(sp__paths.server + sp__paths.pages));
+  });
+
+  //////////////////////////////
+  // Build Config
+  //////////////////////////////
+  gulp.task('build-config', function (cb) {
+    var close = 0;
+
+    build.fileJSON(sp__paths.partials, ['.html'], function (files) {
+      fs.outputJSON(sp__paths.server + sp__paths.configFile, files);
+      gutil.log('Updated file listing');
+
+      if (close < 3) {
+        close++;
+      }
+      else {
+        cb();
+      }
+    });
+
+    build.fileJSON(sp__paths.server + sp__paths.demos + '/', ['.json'], function (files) {
+      files.pages.forEach(function (v, k) {
+        files.pages[k].path = v.path.replace('partials/', 'demos/');
+      });
+      fs.outputJSON(sp__paths.server + sp__paths.configPages, files);
+      gutil.log('Updated pages listing');
+
+        if (close < 3) {
+          close++;
+        }
+        else {
+          cb();
+        }
+    });
+
+    build.menu(sp__paths, function (menu) {
+      fs.outputJSON(sp__paths.server + sp__paths.configMenu, menu);
+      gutil.log('Updated menu information');
+
+      if (close < 3) {
+        close++;
+      }
+      else {
+        cb();
+      }
+    });
+
+    build.scopeJSON(function (scope) {
+      fs.outputJSON(sp__paths.server + sp__paths.configScope, scope);
+      gutil.log('Updated scope information');
+
+      if (close < 3) {
+        close++;
+      }
+      else {
+        cb();
+      }
+    });
   });
 
   //////////////////////////////
   // Compass Task
   //////////////////////////////
-  gulp.task('compass', function () {
-    return gulp.src(paths.sass + '/**/*')
+  gulp.task('watch-compass', function (cb) {
+    return gulp.src(sp__paths.sass)
       .pipe(shell([
         'bundle exec compass watch --time --css-dir=.www/' + dirs.css
       ]));
   });
 
   //////////////////////////////
-  // Copies the partials over
-  //////////////////////////////
-  gulp.task('components', function () {
-    var sections = yaml.safeLoad(fs.readFileSync('./config/sections.yml', 'utf8'));
-
-    Object.keys(sections).forEach(function (k) {
-      var dest = '.www/partials/' + k;
-      if (!fs.existsSync('.www')) {
-        fs.mkdirSync('.www');
-      }
-      if (!fs.existsSync('.www/partials')) {
-        fs.mkdirSync('.www/partials');
-      }
-      if (!fs.existsSync(dest)) {
-        fs.mkdirSync(dest);
-      }
-
-      watch({ glob: k + '/**/*' })
-        .pipe(cache(k))
-        .pipe(plumber())
-        .pipe(maid({folder: k}))
-        .pipe(folderwalk({
-          'base': k
-        }))
-        .pipe(browserSync.reload({stream:true}));
-
-      watch({ glob: k + '/' + k +'.yml' })
-        .pipe(cache(k + '-yml'))
-        .pipe(plumber())
-        .pipe(yamlJSON())
-        .pipe(gulp.dest('.tmp/scopes'))
-        .pipe(buildScope())
-        .pipe(browserSync.reload({stream:true}));
-    });
-
-    watch({ glob: 'pages/**/*.yml' })
-      .pipe(cache('pages'))
-      .pipe(plumber())
-      .pipe(yamlJSON())
-      .pipe(gulp.dest('.tmp/pages'))
-      .pipe(pagewalk())
-      .pipe(buildMenu())
-      .pipe(browserSync.reload({stream:true}));
-  });
-
-  //////////////////////////////
-  // Watches for changes to the tmp data and rebuilds the menus and files
-  //////////////////////////////
-  gulp.task('data', function () {
-    watch({ glob: '.tmp/data/*.json'})
-      .pipe(buildMenu())
-      .pipe(browserSync.reload({stream:true}));
-  });
-
-  //////////////////////////////
   // Watch
   //////////////////////////////
   gulp.task('watch', function () {
-
-    watch({ glob: dirs.js + '/**/*.js' })
-      .pipe(jshint())
-      .pipe(jshint.reporter(stylish))
-      .pipe(gulp.dest('.www/' + dirs.js));
-
-    watch({ glob: dirs.img + '/**/*'})
-      .pipe(gulp.dest('.www/' + dirs.img));
-
-    watch({ glob: '.www/' + dirs.fonts + '/**/*' })
-      .pipe(gulp.dest('.www/' + dirs.fonts));
-
-    watch({ glob: 'index.html' })
-      .pipe(gulp.dest('.www/'));
-  });
-
-  // gulp.task('walk', function () {
-  //   gulp.src('components')
-  //     .pipe(folderwalk({
-  //       'base': 'components'
-  //     }))
-  // });
-
-  //////////////////////////////
-  // BrowserSync Task
-  //////////////////////////////
-  gulp.task('browserSync', function () {
-    browserSync.init([
-      '.www/' + dirs.css +  '/**/*.css',
-      '.www/' + dirs.js + '/**/*.js',
-      '.www/' + dirs.img + '/**/*',
-      '.www/' + dirs.fonts + '/**/*',
-      '.www/**/*.html',
-    ], {
-      server: {
-        baseDir: '.www'
+    // JS
+    var watchJS = gulp.watch(sp__paths.js,    ['server-js']);
+    watchJS.on('change', function (event) {
+      if (event.type === 'deleted') {
+        delete cache.caches['watch-js'][event.path]
       }
     });
-  });
 
-  //////////////////////////////
-  // Server Tasks
-  //////////////////////////////
-  gulp.task('server', ['watch', 'sections', 'bcc', 'components', 'data', 'compass', 'browserSync']);
-  gulp.task('serve', ['server']);
+    // Images
+    var watchImg = gulp.watch(sp__paths.img,   ['server-img']);
+    watchImg.on('change', function (event) {
+      if (event.type === 'deleted') {
+        delete cache.caches['watch-img'][event.path]
+      }
+    });
 
-  //////////////////////////////
-  // Init
-  //////////////////////////////
-  gulp.task('build-init', function () {
-    //////////////////////////////
-    // Watch
-    //////////////////////////////
-    gulp.src(dirs.js + '/**/*.js')
-      .pipe(jshint())
-      .pipe(jshint.reporter(stylish))
-      .pipe(gulp.dest('.www/' + dirs.js));
+    // Fonts
+    var watchFonts = gulp.watch(sp__paths.fonts, ['server-fonts']);
+    watchFonts.on('change', function (event) {
+      if (event.type === 'deleted') {
+        delete cache.caches['watch-fonts'][event.path]
+      }
+    });
 
-    gulp.src(dirs.img + '/**/*')
-      .pipe(gulp.dest('.www/' + dirs.img));
-
-    gulp.src('.www/' + dirs.fonts + '/**/*' )
-      .pipe(gulp.dest('.www/' + dirs.fonts));
-
-    gulp.src('index.html' )
-      .pipe(gulp.dest('.www/'));
-
-    //////////////////////////////
     // Sections
-    //////////////////////////////
-    gulp.src('config/sections.yml')
-      .pipe(yamlJSON())
-      .pipe(gulp.dest('.www/config'))
-      .pipe(buildMenu());
-
-    gulp.src('config/style-tile.yml' )
-      .pipe(yamlJSON())
-      .pipe(gulp.dest('.www/config'));
-
-    //////////////////////////////
-    // Bower Components
-    //////////////////////////////
-    gulp.src('bower_components/**/*')
-      .pipe(gulp.dest('.www/bower_components'));
-
-    //////////////////////////////
-    // Components
-    //////////////////////////////
-    var sections = yaml.safeLoad(fs.readFileSync('./config/sections.yml', 'utf8'));
-
-    Object.keys(sections).forEach(function (k) {
-      var dest = '.www/partials/' + k;
-      if (!fs.existsSync('.www')) {
-        fs.mkdirSync('.www');
-      }
-      if (!fs.existsSync('.www/partials')) {
-        fs.mkdirSync('.www/partials');
-      }
-      if (!fs.existsSync(dest)) {
-        fs.mkdirSync(dest);
-      }
-
-      gulp.src(k + '/**/*' )
-        .pipe(plumber())
-        .pipe(maid({folder: k}))
-        .pipe(folderwalk({
-          'base': k
-        }));
-
-      gulp.src(k + '/' + k +'.yml' )
-        .pipe(plumber())
-        .pipe(yamlJSON())
-        .pipe(gulp.dest('.tmp/scopes'))
-        .pipe(buildScope());
+    var watchSections = gulp.watch('config/sections.yml');
+    watchSections.on('change', function (event) {
+      build.menu(sp__paths,  function (menu) {
+        fs.outputJSON(sp__paths.server + sp__paths.configMenu, menu);
+        gutil.log('Updated menu information');
+        reload();
+      });
     });
 
-    gulp.src('pages/**/*.yml' )
-      .pipe(plumber())
+    // Index
+    gulp.watch(sp__paths.index, ['server-index']);
+    // CSS
+    gulp.watch(sp__paths.server + sp__paths.css, ['server-css']);
+    // Style Tile
+    gulp.watch('config/style-tile.yml', ['server-style-tile']);
+  });
+
+  //////////////////////////////
+  // Watch JS
+  //////////////////////////////
+  gulp.task('server-js', function () {
+    return gulp.src(sp__paths.js)
+      .pipe(cache('watch-js'))
+      .pipe(jshint())
+      .pipe(jshint.reporter(stylish))
+      .pipe(gulp.dest(sp__paths.server + dirs.js))
+      .pipe(reload({stream:true}));
+  });
+
+  //////////////////////////////
+  // Watch Images
+  //////////////////////////////
+  gulp.task('server-img', function () {
+    return gulp.src(sp__paths.img)
+      .pipe(cache('watch-img'))
+      .pipe(gulp.dest(sp__paths.server + dirs.img))
+      .pipe(reload({stream:true}));
+  });
+
+  //////////////////////////////
+  // Watch Fonts
+  //////////////////////////////
+  gulp.task('server-fonts', function () {
+    return gulp.src(sp__paths.fonts)
+      .pipe(cache('watch-fonts'))
+      .pipe(gulp.dest(sp__paths.server + dirs.fonts))
+      .pipe(reload({stream:true}));
+  });
+
+  //////////////////////////////
+  // Watch Index
+  //////////////////////////////
+  gulp.task('server-index', function () {
+    return gulp.src(sp__paths.index)
+      .pipe(gulp.dest(sp__paths.server))
+      .pipe(reload({stream:true}));
+  });
+
+  //////////////////////////////
+  // Watch CSS
+  //////////////////////////////
+  gulp.task('server-css', function () {
+    return gulp.src(sp__paths.server + sp__paths.css)
+      .pipe(reload({stream:true}));
+  });
+
+  //////////////////////////////
+  // Watch Sections
+  //////////////////////////////
+  gulp.task('server-sections', function () {
+    return gulp.src('config/sections.yml')
       .pipe(yamlJSON())
-      .pipe(gulp.dest('.tmp/pages'))
-      .pipe(pagewalk())
-      .pipe(buildMenu());
-
-    //////////////////////////////
-    // Data
-    //////////////////////////////
-    gulp.src('.tmp/data/*.json')
-      .pipe(buildMenu());
-  });
-
-  gulp.task('build-compass', shell.task([
-    'bundle exec compass compile --time --css-dir=.www/' + dirs.css
-  ]));
-
-  gulp.task('init', ['build-compass', 'build-init']);
-
-  //////////////////////////////
-  // Refresh
-  //////////////////////////////
-  gulp.task('clean-tmp', function () {
-    return gulp.src('.tmp').pipe(clean());
-  });
-
-  gulp.task('clean-working', function () {
-    return gulp.src('.www').pipe(clean());
-  });
-
-  gulp.task('clean', ['clean-tmp', 'clean-working']);
-
-  gulp.task('refresh', function () {
-    sequence(
-      'clean',
-      'init'
-    );
+      .pipe(gulp.dest(sp__paths.server + 'config'))
+      .pipe(reload({stream:true}));
   });
 
   //////////////////////////////
-  // Build
+  // Watch Style Tile
   //////////////////////////////
-  gulp.task('build-clean', function () {
-    return gulp.src('.dist').pipe(clean());
+  gulp.task('server-style-tile', function () {
+    return gulp.src('config/style-tile.yml')
+      .pipe(yamlJSON())
+      .pipe(gulp.dest(sp__paths.server + 'config'))
+      .pipe(reload({stream:true}));
   });
 
-  gulp.task('build-copy-config', function () {
-    return gulp.src('.www/config/**/*').pipe(gulp.dest('.dist/config/'));
+  //////////////////////////////
+  // Watch Scope
+  //////////////////////////////
+  gulp.task('watch-scopes', function () {
+    return gulp.watch(sp__paths.scopes)
+      .on('change', function (event) {
+        var start = process.hrtime(),
+            filePath = event.path.replace(__dirname + '/', '');
+
+        if (event.type === 'changed') {
+          gutil.log('File ' + gutil.colors.magenta('./' + filePath) + ' was ' + gutil.colors.cyan(event.type));
+
+          build.scopeJSON(function (scopeJSON) {
+            fs.outputJSON(sp__paths.server + sp__paths.configScope, scopeJSON);
+            gutil.log('Updated scope variables');
+          });
+        }
+      });
   });
 
-  gulp.task('build-copy-partials', function () {
-    return gulp.src('.www/partials/**/*').pipe(gulp.dest('.dist/partials/'));
+
+  //////////////////////////////
+  // Watch Pages
+  //////////////////////////////
+  gulp.task('watch-pages', function() {
+    return gulp.watch('pages/**/*')
+      .on('change', function (event) {
+        var start = process.hrtime();
+        var end = false;
+        //////////////////////////////
+        // Determine relative path and extension
+        //////////////////////////////
+        var filePath = event.path.replace(process.cwd() + '/', '');
+        var ext = path.extname(filePath);
+        var noun = (ext === '') ? 'Folder' : 'File';
+
+        // User feedback, something happened!
+        gutil.log(noun + ' ' + gutil.colors.magenta('./' + filePath) + ' was ' + gutil.colors.cyan(event.type));
+
+        if (ext === '.yml' || ext === '.html') {
+          // If a file is changed or added, copy it over
+          if (event.type === 'changed' || event.type === 'added') {
+            if (ext === '.html') {
+              fs.copySync('./' + filePath, sp__paths.server + sp__paths.demos + '/' + filePath);
+            }
+            else {
+              var contents = yaml.load(filePath);
+              filePath = filePath.replace(ext, '.json');
+              // if (contents !== null) {
+              fs.outputJSONSync(sp__paths.server + sp__paths.demos + '/' + filePath, contents);
+              // }
+            }
+            reload();
+          }
+          // If a file is deleted, remove it
+          else if (event.type === 'deleted') {
+            filePath = filePath.replace(ext, '.json');
+            fs.removeSync(sp__paths.server + sp__paths.demos + '/' + filePath);
+          }
+
+          // Provide user feedback
+          gutil.log(patterns.titleize(event.type) + ' ' + gutil.colors.magenta(sp__paths.server + sp__paths.demos + '/' + filePath));
+
+          // Build Files
+          if (event.type === 'added' || event.type === 'deleted') {
+            build.fileJSON(sp__paths.server + sp__paths.demos + '/', ['.json'], function (files) {
+              files.pages.forEach(function (v, k) {
+                files.pages[k].path = v.path.replace('partials/', 'demos/');
+              });
+              fs.outputJSON(sp__paths.server + sp__paths.configPages, files);
+              gutil.log('Updated pages listing');
+
+            });
+            build.menu(sp__paths, function (menu) {
+              fs.outputJSON(sp__paths.server + sp__paths.configMenu, menu);
+              gutil.log('Updated menu information');
+
+              if (end === false) {
+                end = true;
+              }
+              else {
+                time.elapsed(start, 'watch-pages');
+                reload();
+              }
+            });
+          }
+        }
+      });
   });
 
-  gulp.task('build-copy-fonts', function () {
-    return gulp.src('./fonts/**/*').pipe(gulp.dest('.dist/fonts/'));
+  //////////////////////////////
+  // Watch Components
+  //////////////////////////////
+  gulp.task('watch-components', function () {
+    return gulp.watch(sp__paths.components)
+      .on('change', function (event) {
+        var start = process.hrtime();
+        var end = false;
+        //////////////////////////////
+        // Determine relative path and extension
+        //////////////////////////////
+        var filePath = event.path.replace(process.cwd() + '/', '');
+        var ext = path.extname(filePath);
+        var noun = (ext === '') ? 'Folder' : 'File';
+
+        // User feedback, something happened!
+        gutil.log(noun + ' ' + gutil.colors.magenta('./' + filePath) + ' was ' + gutil.colors.cyan(event.type));
+
+        // Handle HTML files
+        if (ext === '.html') {
+          // If a file is changed or added, copy it over
+          if (event.type === 'changed' || event.type === 'added') {
+            fs.copySync('./' + filePath, sp__paths.partials + filePath);
+            reload();
+          }
+          // If a file is deleted, remove it
+          else if (event.type === 'deleted') {
+            fs.removeSync(sp__paths.partials + filePath);
+          }
+
+          // Provide user feedback
+          gutil.log(patterns.titleize(event.type) + ' ' + gutil.colors.magenta(sp__paths.partials + filePath));
+        }
+        // Handle folder removal
+        else if (ext === '') {
+          // If a folder is deleted, remove it
+          if (event.type === 'deleted') {
+            fs.removeSync(sp__sections + filePath);
+            // Provide user feedback
+            gutil.log(patterns.titleize(event.type) + ' ' + gutil.colors.magenta(sp__paths.partials + filePath));
+          }
+        }
+
+        // If an HTML file or a folder has been added, rebuild the associated JSON
+        if (ext === '.html' || ext === '') {
+          if (event.type === 'added' || event.type === 'deleted') {
+            build.fileJSON(sp__paths.partials, ['.html'], function (fileJSON) {
+                fs.outputJSON(sp__paths.server + sp__paths.configFile, fileJSON);
+                gutil.log('Updated file listing');
+                if (end === false) {
+                  end = true;
+                }
+                else {
+                  time.elapsed(start, 'watch-components');
+                  reload();
+                }
+
+            });
+            build.menu(sp__paths, function (menu) {
+              fs.outputJSON(sp__paths.server + sp__paths.configMenu, menu);
+              gutil.log('Updated menu information');
+
+              if (end === false) {
+                end = true;
+              }
+              else {
+                time.elapsed(start, 'watch-components');
+                reload();
+              }
+            });
+          }
+        }
+      });
   });
 
-  gulp.task('build-export', function () {
-    return gulp.src('.dist/**/*').pipe(gulp.dest('EXPORT/'));
-  })
+  //////////////////////////////
+  // Dist Tasks
+  //////////////////////////////
+  gulp.task('dist', function (cb) {
+    return sequence(['refresh', 'dist-clean'],
+                    'dist-copy',
+                    ['dist-min', 'dist-imagemin'],
+                    'dist-clean-bower',
+                    cb);
+  });
 
-  gulp.task('build-min', function () {
-    return gulp.src('.www/index.html')
+  gulp.task('dist-clean', function (cb) {
+    rimraf(sp__paths.dist, cb);
+  });
+
+  gulp.task('dist-copy', function () {
+    return gulp.src(sp__paths.server + '/**/*')
+      .pipe(gulp.dest(sp__paths.dist));
+  });
+
+  gulp.task('dist-min', function () {
+    return gulp.src(sp__paths.dist + sp__paths.index)
       .pipe(usemin({
-        css: [cssmin(), 'concat', rev()],
+        css: [minifyCSS(), 'concat', rev()],
         js: [uglify(), rev()]
       }))
-      .pipe(gulp.dest('.dist/'));
+      .pipe(gulp.dest(sp__paths.dist));
   });
 
-  gulp.task('build-images', function () {
-    return gulp.src('./images/**/*')
+  gulp.task('dist-clean-bower', function (cb) {
+    rimraf(sp__paths.dist + 'bower_components', cb);
+  });
+
+  gulp.task('dist-imagemin', function () {
+    return gulp.src(sp__paths.dist + sp__paths.img)
       .pipe(imagemin({
         progressive: true,
+        optimizationLevel: 7,
+        interlaced: true,
         svgoPlugins: [{removeViewBox: false}],
         use: [pngcrush()]
       }))
-      .pipe(gulp.dest('.dist/images/'))
+      .pipe(gulp.dest(sp__paths.dist + dirs.img));
   });
 
-  gulp.task('deploy', function () {
-    var deploy = yaml.safeLoad(fs.readFileSync('./config/deploy.yml', 'utf8'));
+  //////////////////////////////
+  // Deploy Tasks
+  //////////////////////////////
+  gulp.task('deploy', function (cb) {
+    return sequence('dist',
+                    'deploy-dist',
+                    'dist-clean',
+                    cb);
+  });
 
-    if (deploy === undefined) {
-      deploy.remote = 'upstream';
-      deploy.branch = 'gh-pages';
-      deploy.message = 'Style Prototype Deploy';
-    }
-
-    return gulp.src('.dist')
+  gulp.task('deploy-dist', function () {
+    return gulp.src(sp__paths.dist)
       .pipe(subtree({
-        remote: deploy.remote,
-        branch: deploy.branch,
-        message: deploy.message
+        remote: sp__deploy.remote,
+        branch: sp__deploy.branch,
+        message: sp__deploy.message
       }))
-      .pipe(clean());
   });
 
-  gulp.task('build', function (cb) {
-    return sequence(
-      'build-clean',
-      ['build-copy-config', 'build-copy-partials', 'build-copy-fonts', 'build-min', 'build-images']
-    );
-  });
-
+  //////////////////////////////
+  // Export Tasks
+  //////////////////////////////
   gulp.task('export', function (cb) {
-    sequence(
-      'build-clean',
-      'build-copy',
-      'build-export'
-    );
+    return sequence('dist',
+                    'export-dist',
+                    'dist-clean',
+                    cb)
   });
 
-  // gulp.task('deploy', function (cb) {
-  //   sequence(
-  //     'build-clean',
-  //     'build',
-  //     'build-deploy'
-  //   );
-  // });
-
-  //////////////////////////////
-  // Default Task
-  //////////////////////////////
-  gulp.task('default', ['server']);
+  gulp.task('export-dist', function () {
+    return gulp.src(sp__paths.dist + '**/*')
+      .pipe(gulp.dest(sp__deploy.export));
+  });
 }
