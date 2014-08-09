@@ -22,6 +22,7 @@ var fs = require('fs-extra'),
     rev = require('gulp-rev'),
     imagemin = require('gulp-imagemin'),
     pngcrush = require('imagemin-pngcrush'),
+    subtree = require('gulp-subtree'),
     gutil = require('gulp-util');
 
 //////////////////////////////
