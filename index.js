@@ -23,6 +23,8 @@ var fs = require('fs-extra'),
     imagemin = require('gulp-imagemin'),
     pngcrush = require('imagemin-pngcrush'),
     subtree = require('gulp-subtree'),
+    exec = require('child_process').exec,
+    argv = require('yargs').argv,
     gutil = require('gulp-util');
 
 //////////////////////////////
@@ -42,27 +44,35 @@ module.exports = function (gulp) {
   //////////////////////////////
   // Setup Variables
   //////////////////////////////
-  var sp__deploy = yaml.load('./config/deploy.yml');
-  var sp__sectionsConfig = build.loadSections();
-  var sp__sections = Object.keys(sp__sectionsConfig);
-  var sp__paths = {
-    server: '.www/',
-    js: dirs.js + '/**/*.js',
-    img: dirs.img + '/**/*',
-    fonts: dirs.fonts + '/**/*',
-    sass: dirs.sass + '/**/*',
-    css: dirs.css + '/**/*.css',
-    demos: 'demos',
-    pages: 'demos/pages',
-    index: 'index.html',
-    dist: '.dist/',
-    components: [],
-    scopes: [],
-    configFile: 'config/files.json',
-    configMenu: 'config/menu.json',
-    configScope: 'config/scopes.json',
-    configPages: 'config/pages.json'
-  }
+  var sp__deploy = yaml.load('./config/deploy.yml'),
+      sp__deployDefaults = {
+        remote: 'origin',
+        branch: 'gh-pages',
+        message: 'Style Prototype Deploy',
+        export: 'export',
+        zip: false
+      },
+    sp__sectionsConfig = build.loadSections(),
+    sp__sections = Object.keys(sp__sectionsConfig),
+    sp__paths = {
+      server: '.www/',
+      js: dirs.js + '/**/*.js',
+      img: dirs.img + '/**/*',
+      fonts: dirs.fonts + '/**/*',
+      sass: dirs.sass + '/**/*',
+      css: dirs.css + '/**/*.css',
+      demos: 'demos',
+      pages: 'demos/pages',
+      index: 'index.html',
+      dist: '.dist/',
+      components: [],
+      scopes: [],
+      configFile: 'config/files.json',
+      configMenu: 'config/menu.json',
+      configScope: 'config/scopes.json',
+      configPages: 'config/pages.json'
+    },
+    i;
 
   sp__sections.forEach(function (v, k) {
     sp__paths.scopes.push(v + '/' + v + '.json');
@@ -71,11 +81,16 @@ module.exports = function (gulp) {
 
   sp__paths.partials = sp__paths.server + 'partials/';
 
-  if (sp__deploy === undefined) {
-    deploy.remote = 'upstream';
-    deploy.branch = 'gh-pages';
-    deploy.message = 'Style Prototype Deploy';
-    deploy.export = 'export' ;
+
+  // Deploy Defaults
+  if (sp__deploy === null) {
+    sp__deploy = {};
+  }
+
+  for (i in sp__deployDefaults) {
+    if (!sp__deploy.hasOwnProperty(i)) {
+      sp__deploy[i] = sp__deployDefaults[i];
+    }
   }
 
   //////////////////////////////
@@ -88,9 +103,16 @@ module.exports = function (gulp) {
   // Refresh the server
   //////////////////////////////
   gulp.task('refresh', function (cb) {
+    var build = ['build-server', 'build-pages', 'bcc'],
+        config = ['build-config'];
+
+    if (argv.zip) {
+      config.push('zip-server');
+    }
+
     return sequence('clean-server',
                     ['build-server', 'build-pages', 'bcc'],
-                    'build-config',
+                    config,
                     cb);
   });
 
@@ -525,9 +547,17 @@ module.exports = function (gulp) {
   // Dist Tasks
   //////////////////////////////
   gulp.task('dist', function (cb) {
+    var copy = ['dist-copy'],
+        min = ['dist-min', 'dist-imagemin'];
+
+    if (argv.zip) {
+      copy.push('zip-small');
+      min.push('zip-dist');
+    }
+
     return sequence(['refresh', 'dist-clean'],
-                    'dist-copy',
-                    ['dist-min', 'dist-imagemin'],
+                    copy,
+                    min,
                     'dist-clean-bower',
                     cb);
   });
@@ -598,5 +628,89 @@ module.exports = function (gulp) {
   gulp.task('export-dist', function () {
     return gulp.src(sp__paths.dist + '**/*')
       .pipe(gulp.dest(sp__deploy.export));
+  });
+
+  //////////////////////////////
+  // Zip
+  //////////////////////////////
+  gulp.task('zip', function (cb) {
+    return sequence('refresh',
+                    'zip-small',
+                    cb);
+  });
+
+  gulp.task('zip-small', function (cb) {
+    return sequence('zip-clean',
+                    'zip-populate',
+                    'zip-build',
+                    'zip-clean',
+                    cb);
+  });
+
+  gulp.task('zip-clean', function (cb) {
+    rimraf('.zip', cb);
+  });
+
+  gulp.task('zip-dist', function (cb) {
+    var name = fs.readJSONSync('bower.json').name.replace('--style-prototype', '');
+    fs.move(name + '.zip', '.dist/' + name + '.zip', function (err) {
+      cb();
+    });
+  });
+
+  gulp.task('zip-server', function (cb) {
+    return sequence('zip-small',
+                    'zip-server-move',
+                    cb);
+  });
+
+  gulp.task('zip-server-move', function (cb) {
+    var name = fs.readJSONSync('bower.json').name.replace('--style-prototype', '');
+    fs.move(name + '.zip', sp__paths.server + '/' + name + '.zip', function (err) {
+      cb();
+    });
+  })
+
+  gulp.task('zip-populate', function (cb) {
+    var surface = ['sass', 'Gemfile', 'Gemfile.lock', 'bower.json', 'config.rb'],
+        www = ['partials', 'demos'],
+        length = 0,
+        total = 0,
+        i;
+
+    for (i in dirs) {
+      if (i !== 'html' && i !== 'sass') {
+        www.push(i);
+      }
+    }
+
+    length = surface.length + www.length;
+
+    www.forEach(function (v) {
+      fs.copy(sp__paths.server + '/' + v, '.zip/' + v, function (err) {
+        total++;
+        if (total === length) {
+          cb();
+        }
+      });
+    });
+
+    surface.forEach(function (v) {
+      fs.copy(v, '.zip/' + v, function (err) {
+        total++;
+        if (total === length) {
+          cb();
+        }
+      });
+    });
+  });
+
+  gulp.task('zip-build', function (cb) {
+    var name = fs.readJSONSync('bower.json').name.replace('--style-prototype', '');
+    process.chdir('.zip');
+    return exec('zip -r ../' + name + ' ./', function (err, out, code) {
+      process.chdir('..');
+      cb();
+    });
   });
 }
