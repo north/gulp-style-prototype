@@ -106,7 +106,12 @@ module.exports = function (gulp) {
     var build = ['build-server', 'build-pages', 'bcc'],
         config = ['build-config'];
 
-    if (argv.zip) {
+    if (sp__deploy.zip) {
+      if (argv.zip === undefined || argv.zip !== false) {
+        config.push('zip-server');
+      }
+    }
+    else if (argv.zip) {
       config.push('zip-server');
     }
 
@@ -550,7 +555,13 @@ module.exports = function (gulp) {
     var copy = ['dist-copy'],
         min = ['dist-min', 'dist-imagemin'];
 
-    if (argv.zip) {
+    if (sp__deploy.zip) {
+      if (argv.zip === undefined || argv.zip !== false) {
+        copy.push('zip-small');
+        min.push('zip-dist');
+      }
+    }
+    else if (argv.zip) {
       copy.push('zip-small');
       min.push('zip-dist');
     }
