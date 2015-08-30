@@ -13,7 +13,7 @@ var fs = require('fs-extra'),
     shell = require('gulp-shell'),
     browserSync = require('browser-sync'),
     reload = browserSync.reload,
-    execSync = require('execSync'),
+    execute = require('child_process').exec,
     sequence = require('run-sequence'),
     yaml = require('yamljs'),
     usemin = require('gulp-usemin'),
@@ -185,7 +185,7 @@ module.exports = function (gulp) {
     fs.copySync('index.html', sp__paths.server + '/index.html');
 
     // Compile Sasss
-    compass = execSync.exec('bundle exec compass compile --force --time --css-dir=.www/' + dirs.css);
+    compass = execute('bundle exec compass compile --force --time --css-dir=.www/' + dirs.css);
     gutil.log(compass.stdout);
 
     cb();
